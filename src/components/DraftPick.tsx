@@ -11,16 +11,16 @@ export default function DraftPick({ pick }: DraftPickProps) {
     <div
       className={`p-2 rounded-lg border text-center min-h-[80px] flex flex-col justify-center transition-all hover:scale-[1.02] ${
         pick.isTraded
-          ? 'bg-warning/10 border-warning/40 hover:border-warning/60'
-          : 'bg-background-secondary border-border hover:border-text-muted'
+          ? 'bg-yellow-500/10 border-yellow-500/40 hover:border-yellow-500/60'
+          : 'bg-secondary border-border hover:border-muted-foreground'
       }`}
     >
-      <div className="text-xs text-text-muted mb-1">{pickLabel}</div>
-      <div className="font-medium text-sm text-text-primary truncate" title={pick.currentOwnerName}>
+      <div className="text-xs text-muted-foreground mb-1">{pickLabel}</div>
+      <div className="font-medium text-sm truncate" title={pick.currentOwnerName}>
         {pick.currentOwnerName}
       </div>
       {pick.isTraded && (
-        <div className="text-xs text-warning mt-1 truncate" title={`via ${pick.originalOwnerName}`}>
+        <div className="text-xs text-yellow-500 mt-1 truncate" title={`via ${pick.originalOwnerName}`}>
           via {pick.originalOwnerName}
         </div>
       )}

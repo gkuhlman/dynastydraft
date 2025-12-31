@@ -1,4 +1,13 @@
 import type { TeamStanding } from '@/lib/types';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface MaxPFComparisonProps {
   standings: TeamStanding[];
@@ -11,104 +20,84 @@ export default function MaxPFComparison({ standings }: MaxPFComparisonProps) {
   );
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-background-secondary border-b border-border">
-            <th className="px-4 py-3 text-left font-medium text-text-secondary">
-              Draft Pos
-            </th>
-            <th className="px-4 py-3 text-left font-medium text-text-secondary">
-              Team
-            </th>
-            <th className="px-4 py-3 text-center font-medium text-text-secondary">
-              Record
-            </th>
-            <th className="px-4 py-3 text-right font-medium text-text-secondary">
-              Points For
-            </th>
-            <th className="px-4 py-3 text-right font-medium text-text-secondary">
-              Calc Max PF
-            </th>
-            <th className="px-4 py-3 text-right font-medium text-text-secondary">
-              Sleeper Max PF
-            </th>
-            <th className="px-4 py-3 text-right font-medium text-text-secondary">
-              Difference
-            </th>
-            <th className="px-4 py-3 text-center font-medium text-text-secondary">
-              Playoff Finish
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {sortedStandings.map((team) => {
-            const diff = team.maxPF - team.sleeperMaxPF;
-            const diffColor =
-              Math.abs(diff) < 1
-                ? 'text-text-muted'
-                : diff > 0
-                ? 'text-green-400'
-                : 'text-red-400';
+    <Table>
+      <TableHeader>
+        <TableRow className="bg-secondary hover:bg-secondary">
+          <TableHead className="text-center">Draft Pos</TableHead>
+          <TableHead>Team</TableHead>
+          <TableHead className="text-center">Record</TableHead>
+          <TableHead className="text-right">Points For</TableHead>
+          <TableHead className="text-right">Calc Max PF</TableHead>
+          <TableHead className="text-right">Sleeper Max PF</TableHead>
+          <TableHead className="text-right">Difference</TableHead>
+          <TableHead className="text-center">Playoff Finish</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {sortedStandings.map((team) => {
+          const diff = team.maxPF - team.sleeperMaxPF;
+          const diffColor =
+            Math.abs(diff) < 1
+              ? 'text-muted-foreground'
+              : diff > 0
+              ? 'text-green-400'
+              : 'text-red-400';
 
-            return (
-              <tr
-                key={team.rosterId}
-                className="border-b border-border hover:bg-card-hover transition-colors"
-              >
-                <td className="px-4 py-3 text-center font-bold text-accent">
-                  {team.draftPosition}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="font-medium text-text-primary">{team.displayName}</div>
-                  {team.teamName && (
-                    <div className="text-xs text-text-muted">{team.teamName}</div>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-center text-text-primary">
-                  {team.wins}-{team.losses}
-                  {team.ties > 0 && `-${team.ties}`}
-                </td>
-                <td className="px-4 py-3 text-right text-text-primary">
-                  {team.pointsFor.toFixed(2)}
-                </td>
-                <td className="px-4 py-3 text-right font-medium text-text-primary">
-                  {team.maxPF.toFixed(2)}
-                </td>
-                <td className="px-4 py-3 text-right text-text-secondary">
-                  {team.sleeperMaxPF.toFixed(2)}
-                </td>
-                <td className={`px-4 py-3 text-right ${diffColor}`}>
-                  {diff > 0 ? '+' : ''}
-                  {diff.toFixed(2)}
-                </td>
-                <td className="px-4 py-3 text-center">
-                  {team.playoffFinish ? (
-                    <span
-                      className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                        team.playoffFinish === 1
-                          ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                          : team.playoffFinish === 2
-                          ? 'bg-gray-500/20 text-gray-300 border border-gray-500/30'
-                          : 'bg-accent/20 text-accent border border-accent/30'
-                      }`}
-                    >
-                      {team.playoffFinish === 1
-                        ? 'Champion'
+          return (
+            <TableRow key={team.rosterId}>
+              <TableCell className="text-center font-bold text-primary">
+                {team.draftPosition}
+              </TableCell>
+              <TableCell>
+                <div className="font-medium">{team.displayName}</div>
+                {team.teamName && (
+                  <div className="text-xs text-muted-foreground">{team.teamName}</div>
+                )}
+              </TableCell>
+              <TableCell className="text-center">
+                {team.wins}-{team.losses}
+                {team.ties > 0 && `-${team.ties}`}
+              </TableCell>
+              <TableCell className="text-right">
+                {team.pointsFor.toFixed(2)}
+              </TableCell>
+              <TableCell className="text-right font-medium">
+                {team.maxPF.toFixed(2)}
+              </TableCell>
+              <TableCell className="text-right text-muted-foreground">
+                {team.sleeperMaxPF.toFixed(2)}
+              </TableCell>
+              <TableCell className={`text-right ${diffColor}`}>
+                {diff > 0 ? '+' : ''}
+                {diff.toFixed(2)}
+              </TableCell>
+              <TableCell className="text-center">
+                {team.playoffFinish ? (
+                  <Badge
+                    variant={team.playoffFinish === 1 ? 'default' : 'outline'}
+                    className={
+                      team.playoffFinish === 1
+                        ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/30'
                         : team.playoffFinish === 2
-                        ? 'Runner-up'
-                        : `${team.playoffFinish}${getOrdinalSuffix(team.playoffFinish)}`}
-                    </span>
-                  ) : (
-                    <span className="text-text-muted">-</span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                        ? 'bg-gray-500/20 text-gray-300 border border-gray-500/30'
+                        : 'border-primary text-primary'
+                    }
+                  >
+                    {team.playoffFinish === 1
+                      ? 'Champion'
+                      : team.playoffFinish === 2
+                      ? 'Runner-up'
+                      : `${team.playoffFinish}${getOrdinalSuffix(team.playoffFinish)}`}
+                  </Badge>
+                ) : (
+                  <span className="text-muted-foreground">-</span>
+                )}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }
 
