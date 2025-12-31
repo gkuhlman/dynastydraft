@@ -7,7 +7,7 @@ import DraftBoard from '@/components/DraftBoard';
 import MaxPFComparison from '@/components/MaxPFComparison';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Check, Link } from 'lucide-react';
+import { Check, Link, Settings2 } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import type {
   DraftOrderMethod,
@@ -41,18 +41,21 @@ function HomeContent() {
   const [playoffsIncluded, setPlayoffsIncluded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [hasAutoLoaded, setHasAutoLoaded] = useState(false);
-
-  // Current settings for sharing
-  const [currentSettings, setCurrentSettings] = useState<{
-    leagueId: string;
-    method: DraftOrderMethod;
-    includePlayoffs: boolean;
-  } | null>(null);
+  const [isSharedView, setIsSharedView] = useState(false);
+  const [showForm, setShowForm] = useState(true);
 
   // Read URL params
   const urlLeagueId = searchParams.get('leagueId') || '';
   const urlMethod = (searchParams.get('method') as DraftOrderMethod) || 'standings_max_pf';
   const urlIncludePlayoffs = searchParams.get('playoffs') === 'true';
+
+  // Determine if this is a shared view on initial load
+  useEffect(() => {
+    if (urlLeagueId && !hasAutoLoaded) {
+      setIsSharedView(true);
+      setShowForm(false);
+    }
+  }, [urlLeagueId, hasAutoLoaded]);
 
   const handleSubmit = useCallback(async (
     leagueId: string,
@@ -62,7 +65,6 @@ function HomeContent() {
     setIsLoading(true);
     setError(null);
     setPlayoffsIncluded(includePlayoffs);
-    setCurrentSettings({ leagueId, method, includePlayoffs });
 
     // Update URL with current settings
     const params = new URLSearchParams();
@@ -144,6 +146,9 @@ function HomeContent() {
           ? err.message
           : 'Failed to fetch league data. Please check the league ID and try again.'
       );
+      // Show form on error so user can try again
+      setShowForm(true);
+      setIsSharedView(false);
     } finally {
       setIsLoading(false);
     }
@@ -176,6 +181,115 @@ function HomeContent() {
     }
   };
 
+  const handleShowForm = () => {
+    setShowForm(true);
+    setIsSharedView(false);
+  };
+
+  // Shared view - draft board front and center
+  if (isSharedView && !showForm && (draftBoards || isLoading)) {
+    return (
+      <main className="min-h-screen py-6 px-4">
+        <div className="max-w-[1600px] mx-auto">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-24">
+              <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+              <p className="text-muted-foreground text-lg">Loading draft board...</p>
+            </div>
+          ) : error ? (
+            <Card className="border-destructive bg-destructive/10">
+              <CardContent className="pt-6 text-destructive text-center">
+                <p className="mb-4">{error}</p>
+                <Button onClick={handleShowForm} variant="outline">
+                  Try Again
+                </Button>
+              </CardContent>
+            </Card>
+          ) : standings && draftBoards && league && (
+            <div className="space-y-6">
+              {/* Header with share and settings buttons */}
+              <div className="flex items-center justify-between">
+                <h1 className="text-2xl font-bold text-muted-foreground">Dynasty Draft Board</h1>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleShowForm}
+                    className="gap-2"
+                  >
+                    <Settings2 className="h-4 w-4" />
+                    Settings
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleShare}
+                    className="gap-2"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="h-4 w-4 text-green-500" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Link className="h-4 w-4" />
+                        Share
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {standingsLeague && standingsLeague.league_id !== league.league_id && (
+                <div className="text-sm text-primary bg-primary/10 border border-primary/30 rounded-lg px-4 py-2">
+                  Draft order based on {standingsLeague.season} season. Traded picks from {league.season}.
+                </div>
+              )}
+
+              {/* Main draft board - large and prominent */}
+              <Card className="glow">
+                <CardContent className="pt-8 pb-8 px-6">
+                  <DraftBoard boards={draftBoards} leagueName={league.name} large />
+                </CardContent>
+              </Card>
+
+              {/* Collapsible Max PF section */}
+              <details className="group">
+                <summary className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors list-none flex items-center gap-2">
+                  <span className="text-sm">View Draft Order Details</span>
+                  <svg className="w-4 h-4 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </summary>
+                <Card className="mt-4">
+                  <CardHeader>
+                    <CardTitle>
+                      Draft Order & Max PF Comparison
+                      {standingsLeague && (
+                        <span className="text-base font-normal text-muted-foreground ml-2">
+                          ({standingsLeague.season} Season)
+                        </span>
+                      )}
+                    </CardTitle>
+                    <CardDescription>
+                      Calculated Max PF uses {playoffsIncluded ? 'all weeks including playoffs (1-17)' : 'regular season weeks (1-14)'} with optimal
+                      lineup placement. Sleeper Max PF is from the API.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <MaxPFComparison standings={standings} />
+                  </CardContent>
+                </Card>
+              </details>
+            </div>
+          )}
+        </div>
+      </main>
+    );
+  }
+
+  // Regular view with form
   return (
     <main className="min-h-screen py-8 px-4">
       <div className="max-w-7xl mx-auto">
@@ -275,18 +389,9 @@ function HomeContent() {
 function LoadingFallback() {
   return (
     <main className="min-h-screen py-8 px-4">
-      <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-2">Dynasty Draft Board</h1>
-          <p className="text-muted-foreground">
-            Generate draft boards with traded picks from your Sleeper league
-          </p>
-        </div>
-        <Card className="mb-8 glow-sm">
-          <CardContent className="pt-6 flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </CardContent>
-        </Card>
+      <div className="max-w-7xl mx-auto flex flex-col items-center justify-center py-24">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground text-lg">Loading...</p>
       </div>
     </main>
   );
