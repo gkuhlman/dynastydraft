@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { DraftOrderMethod } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,12 +16,34 @@ interface LeagueInputProps {
     includePlayoffs: boolean
   ) => void;
   isLoading: boolean;
+  initialLeagueId?: string;
+  initialMethod?: DraftOrderMethod;
+  initialIncludePlayoffs?: boolean;
 }
 
-export default function LeagueInput({ onSubmit, isLoading }: LeagueInputProps) {
-  const [leagueId, setLeagueId] = useState('');
-  const [method, setMethod] = useState<DraftOrderMethod>('standings_max_pf');
-  const [includePlayoffs, setIncludePlayoffs] = useState(false);
+export default function LeagueInput({
+  onSubmit,
+  isLoading,
+  initialLeagueId = '',
+  initialMethod = 'standings_max_pf',
+  initialIncludePlayoffs = false,
+}: LeagueInputProps) {
+  const [leagueId, setLeagueId] = useState(initialLeagueId);
+  const [method, setMethod] = useState<DraftOrderMethod>(initialMethod);
+  const [includePlayoffs, setIncludePlayoffs] = useState(initialIncludePlayoffs);
+
+  // Update state when initial values change (e.g., from URL params)
+  useEffect(() => {
+    if (initialLeagueId) setLeagueId(initialLeagueId);
+  }, [initialLeagueId]);
+
+  useEffect(() => {
+    setMethod(initialMethod);
+  }, [initialMethod]);
+
+  useEffect(() => {
+    setIncludePlayoffs(initialIncludePlayoffs);
+  }, [initialIncludePlayoffs]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

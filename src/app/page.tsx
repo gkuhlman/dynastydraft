@@ -1,15 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import LeagueInput from '@/components/LeagueInput';
 import DraftBoard from '@/components/DraftBoard';
 import MaxPFComparison from '@/components/MaxPFComparison';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Check, Link } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import type {
   DraftOrderMethod,
   League,
   Roster,
-  User,
   TeamStanding,
   DraftBoard as DraftBoardType,
 } from '@/lib/types';
@@ -25,7 +28,10 @@ import {
 import { calculateAllMaxPF } from '@/lib/max-pf-calculator';
 import { calculateDraftOrder, generateDraftBoard } from '@/lib/draft-order';
 
-export default function Home() {
+function HomeContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [league, setLeague] = useState<League | null>(null);
@@ -33,8 +39,22 @@ export default function Home() {
   const [standings, setStandings] = useState<TeamStanding[] | null>(null);
   const [draftBoards, setDraftBoards] = useState<DraftBoardType[] | null>(null);
   const [playoffsIncluded, setPlayoffsIncluded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [hasAutoLoaded, setHasAutoLoaded] = useState(false);
 
-  const handleSubmit = async (
+  // Current settings for sharing
+  const [currentSettings, setCurrentSettings] = useState<{
+    leagueId: string;
+    method: DraftOrderMethod;
+    includePlayoffs: boolean;
+  } | null>(null);
+
+  // Read URL params
+  const urlLeagueId = searchParams.get('leagueId') || '';
+  const urlMethod = (searchParams.get('method') as DraftOrderMethod) || 'standings_max_pf';
+  const urlIncludePlayoffs = searchParams.get('playoffs') === 'true';
+
+  const handleSubmit = useCallback(async (
     leagueId: string,
     method: DraftOrderMethod,
     includePlayoffs: boolean
@@ -42,6 +62,16 @@ export default function Home() {
     setIsLoading(true);
     setError(null);
     setPlayoffsIncluded(includePlayoffs);
+    setCurrentSettings({ leagueId, method, includePlayoffs });
+
+    // Update URL with current settings
+    const params = new URLSearchParams();
+    params.set('leagueId', leagueId);
+    params.set('method', method);
+    if (includePlayoffs) {
+      params.set('playoffs', 'true');
+    }
+    router.replace(`?${params.toString()}`, { scroll: false });
 
     try {
       const currentLeague = await fetchLeague(leagueId);
@@ -117,6 +147,33 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
+  }, [router]);
+
+  // Auto-load if URL has league ID (only once)
+  useEffect(() => {
+    if (urlLeagueId && !hasAutoLoaded && !isLoading) {
+      setHasAutoLoaded(true);
+      handleSubmit(urlLeagueId, urlMethod, urlIncludePlayoffs);
+    }
+  }, [urlLeagueId, urlMethod, urlIncludePlayoffs, hasAutoLoaded, isLoading, handleSubmit]);
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for browsers that don't support clipboard API
+      const textArea = document.createElement('textarea');
+      textArea.value = url;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   return (
@@ -133,7 +190,13 @@ export default function Home() {
 
         <Card className="mb-8 glow-sm">
           <CardContent className="pt-6">
-            <LeagueInput onSubmit={handleSubmit} isLoading={isLoading} />
+            <LeagueInput
+              onSubmit={handleSubmit}
+              isLoading={isLoading}
+              initialLeagueId={urlLeagueId}
+              initialMethod={urlMethod}
+              initialIncludePlayoffs={urlIncludePlayoffs}
+            />
           </CardContent>
         </Card>
 
@@ -157,7 +220,28 @@ export default function Home() {
             )}
 
             <Card className="glow-sm">
-              <CardContent className="pt-6">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleShare}
+                  className="gap-2"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="h-4 w-4 text-green-500" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Link className="h-4 w-4" />
+                      Share Draft
+                    </>
+                  )}
+                </Button>
+              </CardHeader>
+              <CardContent>
                 <DraftBoard boards={draftBoards} leagueName={league.name} />
               </CardContent>
             </Card>
@@ -185,5 +269,33 @@ export default function Home() {
         )}
       </div>
     </main>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <main className="min-h-screen py-8 px-4">
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-2">Dynasty Draft Board</h1>
+          <p className="text-muted-foreground">
+            Generate draft boards with traded picks from your Sleeper league
+          </p>
+        </div>
+        <Card className="mb-8 glow-sm">
+          <CardContent className="pt-6 flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </CardContent>
+        </Card>
+      </div>
+    </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <HomeContent />
+    </Suspense>
   );
 }
