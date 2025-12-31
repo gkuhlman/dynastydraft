@@ -23,7 +23,7 @@ function getDisplayName(
   const user = users.find((u) => u.user_id === roster.owner_id);
   if (!user) return `Team ${rosterId}`;
 
-  return user.metadata?.team_name || user.display_name;
+  return user.display_name || user.metadata?.team_name || `Team ${rosterId}`;
 }
 
 /**
