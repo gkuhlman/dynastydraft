@@ -25,69 +25,64 @@ export default function DraftBoard({ boards, leagueName, large = false }: DraftB
     picksByRound.get(pick.round)!.push(pick);
   }
 
-  const minColWidth = large ? '120px' : '100px';
-  const roundColWidth = large ? '100px' : '80px';
-  const gap = large ? 'gap-3' : 'gap-2';
-  const mb = large ? 'mb-3' : 'mb-2';
+  const gap = large ? 'gap-2 lg:gap-3' : 'gap-1.5 lg:gap-2';
 
   return (
-    <div className={large ? 'space-y-8' : 'space-y-6'}>
-      <div className="flex items-center justify-between">
-        <h2 className={`font-bold ${large ? 'text-3xl' : 'text-2xl'}`}>{leagueName}</h2>
+    <div className={large ? 'space-y-6 lg:space-y-8' : 'space-y-4 lg:space-y-6'}>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className={`font-bold ${large ? 'text-2xl lg:text-3xl' : 'text-xl lg:text-2xl'}`}>{leagueName}</h2>
         <Badge
           variant="outline"
-          className={`text-primary border-primary ${large ? 'text-lg px-4 py-2' : 'text-base px-3 py-1'}`}
+          className={`text-primary border-primary ${large ? 'text-sm lg:text-lg px-3 py-1 lg:px-4 lg:py-2' : 'text-sm px-3 py-1'}`}
         >
           {board.season} Draft
         </Badge>
       </div>
 
-      <div className="overflow-x-auto">
-        <div className="min-w-max">
+      {/* Scroll container for mobile */}
+      <div className="overflow-x-auto -mx-2 px-2 pb-2 scrollbar-thin">
+        <div
+          className={`grid ${gap}`}
+          style={{
+            gridTemplateColumns: `minmax(50px, 70px) repeat(${numTeams}, minmax(70px, 1fr))`,
+            minWidth: `${numTeams * 90 + 80}px`
+          }}
+        >
           {/* Header row */}
-          <div
-            className={`grid ${gap} ${mb}`}
-            style={{ gridTemplateColumns: `${roundColWidth} repeat(${numTeams}, minmax(${minColWidth}, 1fr))` }}
-          >
-            <div className={`text-center font-medium text-muted-foreground ${large ? 'text-base' : 'text-sm'}`}>
-              Round
-            </div>
-            {Array.from({ length: numTeams }, (_, i) => (
-              <div key={i} className={`text-center font-medium text-muted-foreground ${large ? 'text-base' : 'text-sm'}`}>
-                Pick {i + 1}
-              </div>
-            ))}
+          <div className="text-center font-medium text-muted-foreground text-xs lg:text-sm p-1">
+            Round
           </div>
-
-          {/* Rounds */}
-          {Array.from(picksByRound.entries()).map(([round, picks]) => (
-            <div
-              key={round}
-              className={`grid ${gap} ${mb}`}
-              style={{ gridTemplateColumns: `${roundColWidth} repeat(${numTeams}, minmax(${minColWidth}, 1fr))` }}
-            >
-              <div className={`flex items-center justify-center font-bold bg-secondary rounded-lg border ${large ? 'text-lg' : ''}`}>
-                Rd {round}
-              </div>
-              {picks
-                .sort((a, b) => a.pick - b.pick)
-                .map((pick) => (
-                  <DraftPick key={`${pick.round}-${pick.pick}`} pick={pick} large={large} />
-                ))}
+          {Array.from({ length: numTeams }, (_, i) => (
+            <div key={i} className="text-center font-medium text-muted-foreground text-xs lg:text-sm p-1">
+              <span className="hidden sm:inline">Pick </span>{i + 1}
             </div>
           ))}
+
+          {/* Rounds */}
+          {Array.from(picksByRound.entries()).flatMap(([round, picks]) => [
+            <div key={`round-${round}`} className="flex items-center justify-center font-bold bg-secondary rounded-lg border text-sm lg:text-base">
+              <span className="hidden sm:inline">Rd </span>
+              <span className="sm:hidden">R</span>
+              {round}
+            </div>,
+            ...picks
+              .sort((a, b) => a.pick - b.pick)
+              .map((pick) => (
+                <DraftPick key={`${pick.round}-${pick.pick}`} pick={pick} large={large} />
+              ))
+          ])}
         </div>
       </div>
 
       {/* Legend */}
-      <div className={`flex gap-6 justify-center ${large ? 'text-base' : 'text-sm'}`}>
-        <div className="flex items-center gap-2">
-          <div className={`bg-secondary border rounded ${large ? 'w-5 h-5' : 'w-4 h-4'}`} />
-          <span className="text-muted-foreground">Original Pick</span>
+      <div className={`flex gap-4 lg:gap-6 justify-center ${large ? 'text-sm lg:text-base' : 'text-xs lg:text-sm'}`}>
+        <div className="flex items-center gap-1.5 lg:gap-2">
+          <div className="w-3 h-3 lg:w-4 lg:h-4 bg-secondary border rounded" />
+          <span className="text-muted-foreground">Original</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className={`bg-yellow-500/20 border border-yellow-500/50 rounded ${large ? 'w-5 h-5' : 'w-4 h-4'}`} />
-          <span className="text-muted-foreground">Traded Pick</span>
+        <div className="flex items-center gap-1.5 lg:gap-2">
+          <div className="w-3 h-3 lg:w-4 lg:h-4 bg-yellow-500/20 border border-yellow-500/50 rounded" />
+          <span className="text-muted-foreground">Traded</span>
         </div>
       </div>
     </div>
