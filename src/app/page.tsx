@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import LeagueInput from '@/components/LeagueInput';
 import DraftBoard from '@/components/DraftBoard';
 import MaxPFComparison from '@/components/MaxPFComparison';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Check, Link, Settings2 } from 'lucide-react';
+import { Check, Link, Settings2, Radio } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import type {
   DraftOrderMethod,
@@ -15,9 +15,14 @@ import type {
   Roster,
   TeamStanding,
   DraftBoard as DraftBoardType,
+  SleeperDraft,
+  SleeperDraftPick,
+  DraftPick,
 } from '@/lib/types';
 import {
   fetchLeague,
+  fetchDraft,
+  fetchDraftPicks,
   fetchRosters,
   fetchUsers,
   fetchAllMatchups,
@@ -26,7 +31,63 @@ import {
   fetchWinnersBracket,
 } from '@/lib/sleeper-api';
 import { calculateAllMaxPF } from '@/lib/max-pf-calculator';
-import { calculateDraftOrder, generateDraftBoard } from '@/lib/draft-order';
+import { calculateDraftOrder, generateDraftBoard, calculateSleeperDraftOrder } from '@/lib/draft-order';
+
+// Calculate poll interval based on pick timer (in seconds)
+function calculatePollInterval(pickTimer: number): number {
+  // pollInterval = max(5, min(30, pickTimer / 3)) in seconds, return ms
+  const intervalSec = Math.max(5, Math.min(30, pickTimer / 3));
+  return intervalSec * 1000;
+}
+
+// Merge draft picks into the board
+function applyDraftPicks(
+  board: DraftBoardType,
+  draftPicks: SleeperDraftPick[]
+): DraftBoardType {
+  const pickedByPosition = new Map<string, SleeperDraftPick>();
+
+  for (const pick of draftPicks) {
+    const key = `${pick.round}-${pick.draft_slot}`;
+    pickedByPosition.set(key, pick);
+  }
+
+  // Find the next pick (on the clock)
+  const totalPicks = draftPicks.length;
+  const numTeams = board.picks.length / board.rounds;
+  const nextPickNum = totalPicks + 1;
+  const nextRound = Math.ceil(nextPickNum / numTeams);
+  const nextSlot = ((nextPickNum - 1) % numTeams) + 1;
+
+  const updatedPicks: DraftPick[] = board.picks.map((pick) => {
+    const key = `${pick.round}-${pick.pick}`;
+    const draftPick = pickedByPosition.get(key);
+
+    const isOnTheClock = pick.round === nextRound && pick.pick === nextSlot;
+
+    if (draftPick) {
+      return {
+        ...pick,
+        pickedPlayer: {
+          name: `${draftPick.metadata.first_name} ${draftPick.metadata.last_name}`,
+          position: draftPick.metadata.position,
+          team: draftPick.metadata.team,
+        },
+        isOnTheClock: false,
+      };
+    }
+
+    return {
+      ...pick,
+      isOnTheClock,
+    };
+  });
+
+  return {
+    ...board,
+    picks: updatedPicks,
+  };
+}
 
 function HomeContent() {
   const searchParams = useSearchParams();
@@ -44,9 +105,16 @@ function HomeContent() {
   const [isSharedView, setIsSharedView] = useState(false);
   const [showForm, setShowForm] = useState(true);
 
+  // Live mode state
+  const [isLiveMode, setIsLiveMode] = useState(false);
+  const [sleeperDraft, setSleeperDraft] = useState<SleeperDraft | null>(null);
+  const [baseDraftBoard, setBaseDraftBoard] = useState<DraftBoardType | null>(null);
+  const [liveDraftPicks, setLiveDraftPicks] = useState<SleeperDraftPick[]>([]);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+
   // Read URL params
   const urlLeagueId = searchParams.get('leagueId') || '';
-  const urlMethod = (searchParams.get('method') as DraftOrderMethod) || 'standings_max_pf';
+  const urlMethod = (searchParams.get('method') as DraftOrderMethod) || 'sleeper_draft';
   const urlIncludePlayoffs = searchParams.get('playoffs') === 'true';
 
   // Determine if this is a shared view on initial load
@@ -77,68 +145,146 @@ function HomeContent() {
 
     try {
       const currentLeague = await fetchLeague(leagueId);
-      setLeague(currentLeague);
 
-      const previousLeagueId = currentLeague.previous_league_id;
-      const standingsLeagueId = previousLeagueId || leagueId;
-
-      const [standingsLeagueData, rosters, users, winnersBracket, players] =
-        await Promise.all([
-          previousLeagueId ? fetchLeague(previousLeagueId) : Promise.resolve(currentLeague),
-          fetchRosters(standingsLeagueId),
-          fetchUsers(standingsLeagueId),
-          fetchWinnersBracket(standingsLeagueId),
-          fetchPlayers(),
-        ]);
-
-      setStandingsLeague(standingsLeagueData);
-
-      const tradedPicks = await fetchTradedPicks(leagueId);
-
-      const weeks = includePlayoffs
-        ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
-        : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
-      const matchupsByWeek = await fetchAllMatchups(standingsLeagueId, weeks);
-
-      const rosterIds = rosters.map((r: Roster) => r.roster_id);
-      const maxPFByRoster = calculateAllMaxPF(
-        rosterIds,
-        matchupsByWeek,
-        standingsLeagueData.roster_positions,
-        players,
-        weeks
-      );
-
-      const sleeperMaxPFByRoster = new Map<number, number>();
-      for (const roster of rosters) {
-        const ppts = roster.settings.ppts || 0;
-        const ppts_decimal = roster.settings.ppts_decimal || 0;
-        sleeperMaxPFByRoster.set(roster.roster_id, ppts + ppts_decimal / 100);
+      // Validate dynasty league format
+      if (currentLeague.settings.type !== 2) {
+        const leagueTypes: Record<number, string> = {
+          0: 'Redraft',
+          1: 'Keeper',
+          2: 'Dynasty',
+        };
+        const leagueType = leagueTypes[currentLeague.settings.type] || 'Unknown';
+        throw new Error(
+          `This is a ${leagueType} league. This tool currently only supports Dynasty leagues.`
+        );
       }
 
-      const teamStandings = calculateDraftOrder(
-        method,
-        rosters,
-        users,
-        maxPFByRoster,
-        sleeperMaxPFByRoster,
-        winnersBracket,
-        standingsLeagueData.settings.playoff_teams
-      );
+      // Validate draft status
+      const validStatuses = ['pre_draft', 'drafting'];
+      if (!validStatuses.includes(currentLeague.status)) {
+        if (currentLeague.status === 'complete') {
+          throw new Error(
+            'This league\'s draft has already been completed. Enter the current season\'s league ID to view the upcoming draft.'
+          );
+        }
+        throw new Error(
+          `Unexpected league status: "${currentLeague.status}". Expected a league with an upcoming or in-progress draft.`
+        );
+      }
 
-      setStandings(teamStandings);
+      // Validate current season
+      const currentYear = new Date().getFullYear();
+      const leagueSeason = parseInt(currentLeague.season, 10);
+      if (leagueSeason < currentYear) {
+        throw new Error(
+          `This is a ${currentLeague.season} season league. Please enter the current ${currentYear} season league ID.`
+        );
+      }
 
-      const draftYear = currentLeague.season;
-      const board = generateDraftBoard(
-        teamStandings,
-        tradedPicks,
-        rosters,
-        users,
-        draftYear,
-        currentLeague.settings.draft_rounds
-      );
+      setLeague(currentLeague);
 
-      setDraftBoards([board]);
+      // Handle Sleeper Draft Order method differently
+      if (method === 'sleeper_draft') {
+        const draftId = currentLeague.draft_id;
+        if (!draftId) {
+          throw new Error('No draft found for this league. The draft may not be set up yet.');
+        }
+
+        const [sleeperDraft, rosters, users, tradedPicks] = await Promise.all([
+          fetchDraft(draftId),
+          fetchRosters(leagueId),
+          fetchUsers(leagueId),
+          fetchTradedPicks(leagueId),
+        ]);
+
+        if (!sleeperDraft.slot_to_roster_id) {
+          throw new Error('Draft order has not been set yet in Sleeper.');
+        }
+
+        setStandingsLeague(currentLeague);
+
+        const teamStandings = calculateSleeperDraftOrder(sleeperDraft, rosters, users);
+        setStandings(teamStandings);
+
+        const draftYear = currentLeague.season;
+        const draftRounds = sleeperDraft.settings.rounds || currentLeague.settings.draft_rounds;
+        const board = generateDraftBoard(
+          teamStandings,
+          tradedPicks,
+          rosters,
+          users,
+          draftYear,
+          draftRounds
+        );
+
+        // Store for live mode
+        setSleeperDraft(sleeperDraft);
+        setBaseDraftBoard(board);
+        setLiveDraftPicks([]);
+        setDraftBoards([board]);
+      } else {
+        // Standings-based methods
+        const previousLeagueId = currentLeague.previous_league_id;
+        const standingsLeagueId = previousLeagueId || leagueId;
+
+        const [standingsLeagueData, rosters, users, winnersBracket, players] =
+          await Promise.all([
+            previousLeagueId ? fetchLeague(previousLeagueId) : Promise.resolve(currentLeague),
+            fetchRosters(standingsLeagueId),
+            fetchUsers(standingsLeagueId),
+            fetchWinnersBracket(standingsLeagueId),
+            fetchPlayers(),
+          ]);
+
+        setStandingsLeague(standingsLeagueData);
+
+        const tradedPicks = await fetchTradedPicks(leagueId);
+
+        const weeks = includePlayoffs
+          ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+          : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+        const matchupsByWeek = await fetchAllMatchups(standingsLeagueId, weeks);
+
+        const rosterIds = rosters.map((r: Roster) => r.roster_id);
+        const maxPFByRoster = calculateAllMaxPF(
+          rosterIds,
+          matchupsByWeek,
+          standingsLeagueData.roster_positions,
+          players,
+          weeks
+        );
+
+        const sleeperMaxPFByRoster = new Map<number, number>();
+        for (const roster of rosters) {
+          const ppts = roster.settings.ppts || 0;
+          const ppts_decimal = roster.settings.ppts_decimal || 0;
+          sleeperMaxPFByRoster.set(roster.roster_id, ppts + ppts_decimal / 100);
+        }
+
+        const teamStandings = calculateDraftOrder(
+          method,
+          rosters,
+          users,
+          maxPFByRoster,
+          sleeperMaxPFByRoster,
+          winnersBracket,
+          standingsLeagueData.settings.playoff_teams
+        );
+
+        setStandings(teamStandings);
+
+        const draftYear = currentLeague.season;
+        const board = generateDraftBoard(
+          teamStandings,
+          tradedPicks,
+          rosters,
+          users,
+          draftYear,
+          currentLeague.settings.draft_rounds
+        );
+
+        setDraftBoards([board]);
+      }
     } catch (err) {
       console.error('Error fetching league data:', err);
       setError(
@@ -161,6 +307,60 @@ function HomeContent() {
       handleSubmit(urlLeagueId, urlMethod, urlIncludePlayoffs);
     }
   }, [urlLeagueId, urlMethod, urlIncludePlayoffs, hasAutoLoaded, isLoading, handleSubmit]);
+
+  // Live mode polling
+  useEffect(() => {
+    if (!isLiveMode || !sleeperDraft || !baseDraftBoard) {
+      // Clean up any existing polling
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+      return;
+    }
+
+    const pollInterval = calculatePollInterval(sleeperDraft.settings.pick_timer);
+
+    const pollForPicks = async () => {
+      try {
+        const picks = await fetchDraftPicks(sleeperDraft.draft_id);
+        setLiveDraftPicks(picks);
+
+        // Apply picks to the board
+        const updatedBoard = applyDraftPicks(baseDraftBoard, picks);
+        setDraftBoards([updatedBoard]);
+      } catch (err) {
+        console.error('Error polling for draft picks:', err);
+      }
+    };
+
+    // Poll immediately on enable
+    pollForPicks();
+
+    // Set up interval
+    pollingRef.current = setInterval(pollForPicks, pollInterval);
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, [isLiveMode, sleeperDraft, baseDraftBoard]);
+
+  // Toggle live mode
+  const toggleLiveMode = useCallback(() => {
+    if (isLiveMode) {
+      // Turning off - reset to base board
+      setIsLiveMode(false);
+      if (baseDraftBoard) {
+        setDraftBoards([baseDraftBoard]);
+      }
+    } else {
+      // Turning on
+      setIsLiveMode(true);
+    }
+  }, [isLiveMode, baseDraftBoard]);
 
   const handleShare = async () => {
     const url = window.location.href;
@@ -211,6 +411,17 @@ function HomeContent() {
               <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-muted-foreground">Dynasty Draft Board</h1>
                 <div className="flex gap-2">
+                  {sleeperDraft && (
+                    <Button
+                      variant={isLiveMode ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={toggleLiveMode}
+                      className={`gap-2 ${isLiveMode ? 'bg-red-600 hover:bg-red-700' : ''}`}
+                    >
+                      <Radio className={`h-4 w-4 ${isLiveMode ? 'animate-pulse' : ''}`} />
+                      {isLiveMode ? 'Live' : 'Go Live'}
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
@@ -240,6 +451,16 @@ function HomeContent() {
                   </Button>
                 </div>
               </div>
+
+              {isLiveMode && sleeperDraft && (
+                <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2 flex items-center gap-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                  </span>
+                  Live Mode: {liveDraftPicks.length} picks made • Polling every {Math.round(calculatePollInterval(sleeperDraft.settings.pick_timer) / 1000)}s
+                </div>
+              )}
 
               {standingsLeague && standingsLeague.league_id !== league.league_id && (
                 <div className="text-sm text-primary bg-primary/10 border border-primary/30 rounded-lg px-4 py-2">
@@ -336,24 +557,37 @@ function HomeContent() {
             <Card className="glow-sm">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <div />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleShare}
-                  className="gap-2"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="h-4 w-4 text-green-500" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Link className="h-4 w-4" />
-                      Share Draft
-                    </>
+                <div className="flex gap-2">
+                  {sleeperDraft && (
+                    <Button
+                      variant={isLiveMode ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={toggleLiveMode}
+                      className={`gap-2 ${isLiveMode ? 'bg-red-600 hover:bg-red-700' : ''}`}
+                    >
+                      <Radio className={`h-4 w-4 ${isLiveMode ? 'animate-pulse' : ''}`} />
+                      {isLiveMode ? 'Live' : 'Go Live'}
+                    </Button>
                   )}
-                </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleShare}
+                    className="gap-2"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="h-4 w-4 text-green-500" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Link className="h-4 w-4" />
+                        Share Draft
+                      </>
+                    )}
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <DraftBoard boards={draftBoards} leagueName={league.name} />

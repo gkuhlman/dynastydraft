@@ -19,6 +19,7 @@ export interface League {
   status: string;
   total_rosters: number;
   previous_league_id?: string;
+  draft_id?: string;
 }
 
 export interface RosterSettings {
@@ -44,6 +45,7 @@ export interface Roster {
 export interface User {
   user_id: string;
   display_name: string;
+  avatar?: string | null;
   metadata?: {
     team_name?: string;
   };
@@ -89,9 +91,52 @@ export interface PlayoffMatchup {
   p?: number; // place - the position the winner of this match finishes in
 }
 
+export interface SleeperDraft {
+  draft_id: string;
+  league_id: string;
+  season: string;
+  status: string;
+  type: string; // 'linear', 'snake', etc.
+  draft_order: Record<string, number> | null; // user_id -> slot position
+  slot_to_roster_id: Record<string, number> | null; // slot -> roster_id
+  settings: {
+    teams: number;
+    rounds: number;
+    slots_qb: number;
+    slots_rb: number;
+    slots_wr: number;
+    slots_te: number;
+    slots_flex: number;
+    slots_k: number;
+    slots_bn: number;
+    pick_timer: number;
+  };
+  metadata?: {
+    name?: string;
+    description?: string;
+  };
+}
+
+export interface SleeperDraftPick {
+  player_id: string;
+  picked_by: string; // user_id
+  roster_id: string;
+  round: number;
+  draft_slot: number;
+  pick_no: number;
+  draft_id: string;
+  is_keeper: boolean | null;
+  metadata: {
+    first_name: string;
+    last_name: string;
+    position: string;
+    team: string | null;
+  };
+}
+
 // App-specific types
 
-export type DraftOrderMethod = 'standings' | 'standings_max_pf';
+export type DraftOrderMethod = 'standings' | 'standings_max_pf' | 'sleeper_draft';
 
 export interface TeamStanding {
   rosterId: number;
@@ -108,6 +153,12 @@ export interface TeamStanding {
   draftPosition?: number;
 }
 
+export interface PickedPlayer {
+  name: string;
+  position: string;
+  team: string | null;
+}
+
 export interface DraftPick {
   season: string;
   round: number;
@@ -116,7 +167,12 @@ export interface DraftPick {
   currentOwnerRosterId: number;
   originalOwnerName: string;
   currentOwnerName: string;
+  originalOwnerAvatar?: string | null;
+  currentOwnerAvatar?: string | null;
   isTraded: boolean;
+  // Live draft fields
+  pickedPlayer?: PickedPlayer;
+  isOnTheClock?: boolean;
 }
 
 export interface DraftBoard {

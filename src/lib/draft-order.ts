@@ -7,6 +7,7 @@ import type {
   DraftPick,
   DraftBoard,
   DraftOrderMethod,
+  SleeperDraft,
 } from './types';
 
 /**
@@ -39,6 +40,23 @@ function getTeamName(
 
   const user = users.find((u) => u.user_id === roster.owner_id);
   return user?.metadata?.team_name;
+}
+
+/**
+ * Get avatar URL for a roster owner
+ */
+function getAvatarUrl(
+  rosterId: number,
+  rosters: Roster[],
+  users: User[]
+): string | null {
+  const roster = rosters.find((r) => r.roster_id === rosterId);
+  if (!roster) return null;
+
+  const user = users.find((u) => u.user_id === roster.owner_id);
+  if (!user?.avatar) return null;
+
+  return `https://sleepercdn.com/avatars/thumbs/${user.avatar}`;
 }
 
 /**
@@ -206,6 +224,51 @@ export function calculateStandingsMaxPFOrder(
 }
 
 /**
+ * Calculate draft order from Sleeper's draft settings
+ * Uses the slot_to_roster_id mapping from the draft API
+ */
+export function calculateSleeperDraftOrder(
+  sleeperDraft: SleeperDraft,
+  rosters: Roster[],
+  users: User[]
+): TeamStanding[] {
+  const standings: TeamStanding[] = [];
+
+  if (!sleeperDraft.slot_to_roster_id) {
+    throw new Error('Draft order has not been set yet');
+  }
+
+  const numTeams = sleeperDraft.settings.teams;
+
+  // slot_to_roster_id maps slot (as string "1", "2", etc.) to roster_id
+  for (let slot = 1; slot <= numTeams; slot++) {
+    const rosterId = sleeperDraft.slot_to_roster_id[slot.toString()];
+    if (rosterId === undefined) {
+      throw new Error(`Missing roster for slot ${slot}`);
+    }
+
+    const roster = rosters.find((r) => r.roster_id === rosterId);
+    const ownerId = roster?.owner_id || '';
+
+    standings.push({
+      rosterId,
+      ownerId,
+      displayName: getDisplayName(rosterId, rosters, users),
+      teamName: getTeamName(rosterId, rosters, users),
+      wins: roster?.settings.wins || 0,
+      losses: roster?.settings.losses || 0,
+      ties: roster?.settings.ties || 0,
+      pointsFor: 0,
+      maxPF: 0,
+      sleeperMaxPF: 0,
+      draftPosition: slot,
+    });
+  }
+
+  return standings;
+}
+
+/**
  * Get current owner of a pick after trades
  */
 export function getPickOwner(
@@ -264,6 +327,8 @@ export function generateDraftBoard(
         currentOwnerRosterId,
         originalOwnerName: getDisplayName(originalOwnerRosterId, rosters, users),
         currentOwnerName: getDisplayName(currentOwnerRosterId, rosters, users),
+        originalOwnerAvatar: getAvatarUrl(originalOwnerRosterId, rosters, users),
+        currentOwnerAvatar: getAvatarUrl(currentOwnerRosterId, rosters, users),
         isTraded: originalOwnerRosterId !== currentOwnerRosterId,
       });
     }

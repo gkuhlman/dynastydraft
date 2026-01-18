@@ -25,7 +25,7 @@ export default function LeagueInput({
   onSubmit,
   isLoading,
   initialLeagueId = '',
-  initialMethod = 'standings_max_pf',
+  initialMethod = 'sleeper_draft',
   initialIncludePlayoffs = false,
 }: LeagueInputProps) {
   const [leagueId, setLeagueId] = useState(initialLeagueId);
@@ -73,6 +73,31 @@ export default function LeagueInput({
       <div className="space-y-3">
         <Label>Draft Order Method</Label>
         <div className="space-y-2">
+          <Card
+            className={`cursor-pointer transition-all ${
+              method === 'sleeper_draft'
+                ? 'border-primary bg-primary/10 glow-sm'
+                : 'hover:border-muted-foreground'
+            }`}
+            onClick={() => !isLoading && setMethod('sleeper_draft')}
+          >
+            <CardContent className="flex items-start gap-3 p-4">
+              <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex items-center justify-center ${
+                method === 'sleeper_draft' ? 'border-primary' : 'border-muted-foreground'
+              }`}>
+                {method === 'sleeper_draft' && (
+                  <div className="w-2 h-2 rounded-full bg-primary" />
+                )}
+              </div>
+              <div>
+                <div className="font-medium">Sleeper Draft Order</div>
+                <div className="text-sm text-muted-foreground">
+                  Use the draft order set in your Sleeper league settings
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card
             className={`cursor-pointer transition-all ${
               method === 'standings'
@@ -125,24 +150,26 @@ export default function LeagueInput({
         </div>
       </div>
 
-      <Card className={`transition-all ${includePlayoffs ? 'border-primary bg-primary/10' : ''}`}>
-        <CardContent className="flex items-center justify-between p-4">
-          <div className="space-y-0.5">
-            <Label htmlFor="include-playoffs" className="cursor-pointer">
-              Include Playoffs in Max PF
-            </Label>
-            <p className="text-sm text-muted-foreground">
-              Calculate Max PF using all weeks including playoffs (weeks 15-17)
-            </p>
-          </div>
-          <Switch
-            id="include-playoffs"
-            checked={includePlayoffs}
-            onCheckedChange={setIncludePlayoffs}
-            disabled={isLoading}
-          />
-        </CardContent>
-      </Card>
+      {method !== 'sleeper_draft' && (
+        <Card className={`transition-all ${includePlayoffs ? 'border-primary bg-primary/10' : ''}`}>
+          <CardContent className="flex items-center justify-between p-4">
+            <div className="space-y-0.5">
+              <Label htmlFor="include-playoffs" className="cursor-pointer">
+                Include Playoffs in Max PF
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Calculate Max PF using all weeks including playoffs (weeks 15-17)
+              </p>
+            </div>
+            <Switch
+              id="include-playoffs"
+              checked={includePlayoffs}
+              onCheckedChange={setIncludePlayoffs}
+              disabled={isLoading}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <Button
         type="submit"

@@ -6,6 +6,8 @@ import type {
   TradedPick,
   Player,
   PlayoffMatchup,
+  SleeperDraft,
+  SleeperDraftPick,
 } from './types';
 
 const BASE_URL = 'https://api.sleeper.app/v1';
@@ -17,6 +19,22 @@ export async function fetchLeague(leagueId: string): Promise<League> {
   const response = await fetch(`${BASE_URL}/league/${leagueId}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch league: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchDraft(draftId: string): Promise<SleeperDraft> {
+  const response = await fetch(`${BASE_URL}/draft/${draftId}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch draft: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchDraftPicks(draftId: string): Promise<SleeperDraftPick[]> {
+  const response = await fetch(`${BASE_URL}/draft/${draftId}/picks`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch draft picks: ${response.statusText}`);
   }
   return response.json();
 }
