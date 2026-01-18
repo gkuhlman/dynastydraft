@@ -146,16 +146,11 @@ function HomeContent() {
     try {
       const currentLeague = await fetchLeague(leagueId);
 
-      // Validate dynasty league format
-      if (currentLeague.settings.type !== 2) {
-        const leagueTypes: Record<number, string> = {
-          0: 'Redraft',
-          1: 'Keeper',
-          2: 'Dynasty',
-        };
-        const leagueType = leagueTypes[currentLeague.settings.type] || 'Unknown';
+      // Validate supported league formats (redraft, keeper, dynasty)
+      const supportedTypes = [0, 1, 2]; // 0 = redraft, 1 = keeper, 2 = dynasty
+      if (!supportedTypes.includes(currentLeague.settings.type)) {
         throw new Error(
-          `This is a ${leagueType} league. This tool currently only supports Dynasty leagues.`
+          `Unsupported league type. This tool supports Redraft, Keeper, and Dynasty leagues.`
         );
       }
 
@@ -409,7 +404,7 @@ function HomeContent() {
             <div className="space-y-6">
               {/* Header with share and settings buttons */}
               <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-muted-foreground">Dynasty Draft Board</h1>
+                <h1 className="text-2xl font-bold text-muted-foreground">Draft Board</h1>
                 <div className="flex gap-2">
                   {sleeperDraft && (
                     <Button
@@ -475,34 +470,36 @@ function HomeContent() {
                 </CardContent>
               </Card>
 
-              {/* Collapsible Max PF section */}
-              <details className="group">
-                <summary className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors list-none flex items-center gap-2">
-                  <span className="text-sm">View Draft Order Details</span>
-                  <svg className="w-4 h-4 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </summary>
-                <Card className="mt-4">
-                  <CardHeader>
-                    <CardTitle>
-                      Draft Order & Max PF Comparison
-                      {standingsLeague && (
-                        <span className="text-base font-normal text-muted-foreground ml-2">
-                          ({standingsLeague.season} Season)
-                        </span>
-                      )}
-                    </CardTitle>
-                    <CardDescription>
-                      Calculated Max PF uses {playoffsIncluded ? 'all weeks including playoffs (1-17)' : 'regular season weeks (1-14)'} with optimal
-                      lineup placement. Sleeper Max PF is from the API.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <MaxPFComparison standings={standings} />
-                  </CardContent>
-                </Card>
-              </details>
+              {/* Collapsible Max PF section - only for dynasty/keeper leagues */}
+              {league.settings.type !== 0 && (
+                <details className="group">
+                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors list-none flex items-center gap-2">
+                    <span className="text-sm">View Draft Order Details</span>
+                    <svg className="w-4 h-4 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </summary>
+                  <Card className="mt-4">
+                    <CardHeader>
+                      <CardTitle>
+                        Draft Order & Max PF Comparison
+                        {standingsLeague && (
+                          <span className="text-base font-normal text-muted-foreground ml-2">
+                            ({standingsLeague.season} Season)
+                          </span>
+                        )}
+                      </CardTitle>
+                      <CardDescription>
+                        Calculated Max PF uses {playoffsIncluded ? 'all weeks including playoffs (1-17)' : 'regular season weeks (1-14)'} with optimal
+                        lineup placement. Sleeper Max PF is from the API.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <MaxPFComparison standings={standings} />
+                    </CardContent>
+                  </Card>
+                </details>
+              )}
             </div>
           )}
         </div>
@@ -516,10 +513,10 @@ function HomeContent() {
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-2">
-            Dynasty Draft Board
+            Sleeper Draft Board
           </h1>
           <p className="text-muted-foreground">
-            Generate draft boards with traded picks from your Sleeper league
+            Generate draft boards with traded picks for your Sleeper league
           </p>
         </div>
 
@@ -594,25 +591,28 @@ function HomeContent() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  Draft Order & Max PF Comparison
-                  {standingsLeague && (
-                    <span className="text-base font-normal text-muted-foreground ml-2">
-                      ({standingsLeague.season} Season)
-                    </span>
-                  )}
-                </CardTitle>
-                <CardDescription>
-                  Calculated Max PF uses {playoffsIncluded ? 'all weeks including playoffs (1-17)' : 'regular season weeks (1-14)'} with optimal
-                  lineup placement. Sleeper Max PF is from the API.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <MaxPFComparison standings={standings} />
-              </CardContent>
-            </Card>
+            {/* Max PF section - only for dynasty/keeper leagues */}
+            {league.settings.type !== 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    Draft Order & Max PF Comparison
+                    {standingsLeague && (
+                      <span className="text-base font-normal text-muted-foreground ml-2">
+                        ({standingsLeague.season} Season)
+                      </span>
+                    )}
+                  </CardTitle>
+                  <CardDescription>
+                    Calculated Max PF uses {playoffsIncluded ? 'all weeks including playoffs (1-17)' : 'regular season weeks (1-14)'} with optimal
+                    lineup placement. Sleeper Max PF is from the API.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <MaxPFComparison standings={standings} />
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
       </div>
