@@ -384,7 +384,7 @@ function HomeContent() {
   // Shared view - draft board front and center
   if (isSharedView && !showForm && (draftBoards || isLoading)) {
     return (
-      <main className="min-h-screen py-6 px-4">
+      <main className="min-h-screen py-6 px-4 football-field-bg">
         <div className="max-w-[1600px] mx-auto">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-24">
@@ -509,7 +509,7 @@ function HomeContent() {
 
   // Regular view with form
   return (
-    <main className="min-h-screen py-8 px-4">
+    <main className="min-h-screen py-8 px-4 football-field-bg">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-2">
@@ -622,7 +622,7 @@ function HomeContent() {
 
 function LoadingFallback() {
   return (
-    <main className="min-h-screen py-8 px-4">
+    <main className="min-h-screen py-8 px-4 football-field-bg">
       <div className="max-w-7xl mx-auto flex flex-col items-center justify-center py-24">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
         <p className="text-muted-foreground text-lg">Loading...</p>
